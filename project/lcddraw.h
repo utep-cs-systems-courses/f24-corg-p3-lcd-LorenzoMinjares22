@@ -64,6 +64,8 @@ void drawRectOutline(u_char colMin, u_char rowMin, u_char width, u_char height,
 void bounceDVDLogo();
 
 void drawDVDLogo(u_char col, u_char row, u_int color, u_int bgColor);
+void drawTriangle(u_char acol, u_char arow, u_char size, u_int color);
+
 #endif // included
 
 

@@ -1,3 +1,5 @@
+// Updated main.c for MSP430 project
+
 #include <msp430.h>
 
 #include <libTimer.h>
@@ -12,19 +14,20 @@
 
 
 
-#define SW1 BIT3
+#define SW1 BIT3 // P1.3
+
+#define SW2 BIT0 // P2.0
+
+#define SW3 BIT1 // P2.1
+
+#define SW4 BIT2 // P2.2
+
+#define SW5 BIT3 // P2.3
 
 
-#define SW2 BIT0
 
-#define SW3 BIT1
-
-#define SW4 BIT2
-
-#define SW5 BIT3
-
- 
 #define SWITCH_1 SW1
+
 #define SWITCH_2 SW2
 
 #define SWITCH_3 SW3
@@ -39,320 +42,127 @@
 
 
 
-volatile int red_on = 0;
+volatile int cpuOff = 0;
 
-volatile int green_on = 0;
+volatile int graphicsState = 0;
 
-volatile int redDim = 0;
-volatile int isCpuOff = 0; // Flag to track CPU state
-volatile u_char width = screenWidth>>1, height = screenHeight>>1;
+volatile int timerCount = 0;
+
+// Function prototypes
+void drawCatShape();
+
+
+void main(void) {
+
+  WDTCTL = WDTPW | WDTHOLD; // Stop watchdog timer
+
+  configureClocks();
+
+  enableWDTInterrupts();
+
+  lcd_init();
+
+  buzzer_init();
 
 
 
-int main(void) {
-  WDTCTL = WDTPW + WDTHOLD;    // Stop watchdog timer
-  configureClocks();           // Setup master clock
-  enableWDTInterrupts();       // Enable watchdog timer interrupts
-  buzzer_init();               // Initialize buzzer
-  
-  P1DIR |= LEDS;               // Set LED pins as outputs
-  P1OUT &= ~LEDS;              // Turn off all LEDs
+  P1DIR |= LEDS; // Set LED pins as outputs
 
-  P1REN |= SWITCH_1;
- 
-  P1IE |= SWITCH_1;
+  P1OUT &= ~LEDS; // Turn off LEDs
+
+
+
+  P1REN |= SWITCH_1; // Enable pull-up resistor
 
   P1OUT |= SWITCH_1;
 
-  P1DIR &= ~SWITCH_1;
+  P1IE |= SWITCH_1; // Enable interrupt for SW1
 
-    
-  P2REN |= SWITCH_P2;          // Enable pull-up resistors for P2 buttons
+
+
+  P2REN |= SWITCH_P2;
 
   P2OUT |= SWITCH_P2;
 
-  P2IE |= SWITCH_P2;  
-  
-  or_sr(0x18); // Start in sleep mode (CPU off, GIE on)
+  P2IE |= SWITCH_P2; // Enable interrupts for P2 sw
+
+  or_sr(0x18); // Enter LPM3 with interrupts enabled
 }
-
-
-
 
 void switch_interrupt_handler_P1() {
   char p1val = P1IN;
+  P1IES |= (p1val & SWITCH_1); // Detect falling edge
+  P1IES &= (p1val | ~SWITCH_1); // Detect rising edge
 
-
-
-  P1IES |= (p1val & SWITCH_1);
-
-  P1IES &= (p1val | ~SWITCH_1);
-
-  
-  if (p1val & SW1) {
-    // Button released, do nothing
-  } else {
-    // Button pressed, toggle CPU state
-    if (isCpuOff) {
-      // Wake the CPU
+  if (!(p1val & SW1)) { // SW1 pressed
+    if (cpuOff) {
+      cpuOff = 0;
       P1OUT &= ~LED_RED;
-      P1OUT |= LED_GREEN; // Turn on LED as indication
-      isCpuOff = 0;             // Mark CPU as active
-      and_sr(~0x10);            // Clear CPUOFF bit (wake CPU)
+      P1OUT |= LED_GREEN;
+      and_sr(~0x10); // Wake CPU
     } else {
-      // Put the CPU to sleep
-      P1OUT &= ~LED_GREEN;        // Turn off LED as indication
+      cpuOff = 1;
+      P1OUT &= ~LED_GREEN;
       P1OUT |= LED_RED;
-      isCpuOff = 1;             // Mark CPU as off
-      or_sr(0x18);              // Set CPUOFF and GIE 
-
-
+      or_sr(0x18); // Enter LPM3
     }
   }
-
-  P1IFG &= ~SWITCH_1; // Clear interrupt flag for SW1
+  P1IFG &= ~SWITCH_1; // Clear interrupt flag
 }
 
-void switch_interrupt_handler_P2_2() {
-
+void switch_interrupt_handler_P2() {
   char p2val = P2IN;
 
-  // Update interrupt edge to detect button press and release
-
-  P2IES |= (p2val & SWITCH_2); // Set high-to-low edge if button is not pressed
-
-  P2IES &= (p2val | ~SWITCH_2); // Set low-to-high edge if button is pressed
-
-  if (p2val & SW2) {
-
-    // Button released, do nothing
-
-  } else {
-
-    bounceDVDLogo();
+  if (!(p2val & SW2)) { // SW2 pressed: Play DVD animation
+    graphicsState = 1;
   }
-}
-
-  
-
-void switch_interrupt_handler_P2_3() {
-
-  char p2val = P2IN;
-
-  P2IES |= (p2val & SWITCH_3);
-
-  P2IES &= (p2val | ~SWITCH_3);
-
-
-
-  if(p2val & SW3) {
-
-    //P1OUT &= ~LED_GREEN;
-
-    green_on = 0;
-
-    //buzzer_set_period(0);
-
-  } else {
-
-    //P1OUT |= LED_GREEN;
-
-    //buzzer_set_period(3300);
-
-    char size = 60;
-
-    green_on = 1;
-
-    clearScreen(COLOR_PINK);
-
-    // drawFilledTriangle(width, height, COLOR_BLACK,size);
-
-    drawString5x7(50,30, "(o_0)", COLOR_WHITE, COLOR_BLACK);
-
-
-
+  if (!(p2val & SW3)) { // SW3 pressed: Draw cat shape
+    graphicsState = 2;
   }
 
-}
-
-volatile int dimDutyCycle = 0; // Duty cycle (0-100%)
-
-volatile int dimEnabled = 0;  // Whether dimming is active
-
-
-void switch_interrupt_handler_P2_4() {
-
-  char p2val = P2IN;
-
-  P2IES |= (p2val & SWITCH_4);
-
-  P2IES &= (p2val | ~SWITCH_4);
-
-  if (p2val & SW4) {
-
-
-
-  }else {
-
-    clearScreen(COLOR_WHITE);
-
-    //drawTriangle(width, height, 15, COLOR_RED);
-
-    // P1OUT &= ~LED;
-
-  }
-
-}
-
-
-
-
-
-
-void switch_interrupt_handler_P2_5() {
-
-  char p2val = P2IN;
-
-  P2IES |= (p2val & SWITCH_5);
-
-  P2IES &= (p2val | ~SWITCH_5);
-
-  if(p2val & SW5) {
-
-    buzzer_set_period(0);
-
-  } else {
-
+  if (!(p2val & SW5)) { // SW5 pressed: Play song
     buzzer_set_period(6590);
-
     __delay_cycles(5000000);
-
     buzzer_set_period(4400);
-
     __delay_cycles(12500000);
-
-    buzzer_set_period(6590);
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(4400);
-
-    __delay_cycles(12500000); //a
-
-    buzzer_set_period(6590);
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(4400);
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(4940); //b
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(5540);//c#
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(6590);
-
-    __delay_cycles(5000000);
-
-    buzzer_set_period(8800);
-
-    //__delay_cycles(5000000);
-
-    //buzzer_set_period(4400);
-
-    __delay_cycles(12500000);
-
     buzzer_set_period(0);
-
-
-
-    /* buzzer_set_period(4940);
-
-    __delay_cycles(2500000);
-
-    buzzer_set_period(5240);
-
-    */
-
   }
 
+  P2IFG &= ~SWITCH_P2; // Clear all P2 interrupt flags
 }
-
-
 
 void __interrupt_vec(PORT1_VECTOR) Port_1() {
-
-  if(P1IFG & SWITCH_1) {
-
-    P1IFG &= ~SWITCH_1;
-
+  if (P1IFG & SWITCH_1) {
     switch_interrupt_handler_P1();
-
   }
-
 }
-
-
 
 void __interrupt_vec(PORT2_VECTOR) Port_2() {
- 
-  if (P2IFG & SW2) {
-
-    P2IFG &= ~SW2;
-
-    switch_interrupt_handler_P2_2();
-
+  if (P2IFG & SWITCH_P2) {
+    switch_interrupt_handler_P2();
   }
-
-  if (P2IFG & SW3) {
-
-    P2IFG &= ~SW3;
-
-    switch_interrupt_handler_P2_3();
-
-  }
-
-  if (P2IFG & SW4) {
-
-    P2IFG &= ~SW4;
-
-    switch_interrupt_handler_P2_4();
-
-  }
-
-  if (P2IFG & SW5) {
-
-    P2IFG &= ~SW5;
-
-    switch_interrupt_handler_P2_5();
-
-  }
-
 }
-
 
 void __interrupt_vec(WDT_VECTOR) WDT() {
+  timerCount++;
+  if (timerCount == 250) { // Update graphics every ~250ms
+    if (graphicsState == 1) {
+      bounceDVDLogo();
+    } else if (graphicsState == 2){
 
-  if (P2IFG & SW2) {
-
-
-
-    P2IFG &= ~SW2;
-
-
-
-    switch_interrupt_handler_P2_2();
-
-
-
-  }
-
-  
-
+      drawCatShape();
+    }
+    timerCount = 0;
 }
+}
+
+// Additional functions
+void drawCatShape() {
+  // Call C and assembly functions to draw shapes
+  clearScreen(COLOR_PINK);
+  drawTriangle(screenWidth / 2, screenHeight / 2, 20, COLOR_BLACK);
+  
+}
+
+
 
