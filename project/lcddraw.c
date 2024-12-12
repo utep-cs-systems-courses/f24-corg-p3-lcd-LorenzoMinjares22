@@ -93,8 +93,30 @@ void drawString5x7(u_char col, u_char row, char *string,
     cols += 6;
   }
 }
+void drawChar11x16(u_char rcol, u_char rrow, char c,
+		   u_int fgColorBGR, u_int bgColorBGR) {
+  u_char col = 0;
+  u_char row = 0;
+  u_char oc = c - 0x20; // Offset to font array
 
+  lcd_setArea(rcol, rrow, rcol + 10, rrow + 15); /* relative to requested col/row */
 
+  for (row = 0; row < 16; row++) {
+    for (col = 0; col < 11; col++) {
+      u_int colorBGR = (font_11x16[oc][col] & (1 << row)) ? fgColorBGR : bgColorBGR;
+      lcd_writeColor(colorBGR);
+    }
+  }
+}
+
+void drawString11x16(u_char col, u_char row, char *string,
+		     u_int fgColorBGR, u_int bgColorBGR) {
+  u_char cols = col;
+  while (*string) {
+    drawChar11x16(cols, row, *string++, fgColorBGR, bgColorBGR);
+    cols += 12; // Move to the next character position
+  }
+}
 /** Draw rectangle outline
  *  
  *  \param colMin Column start
@@ -150,7 +172,7 @@ void drawDVDLogo(u_char col, u_char row, u_int color, u_int bgColor) {
 
   // Draw "CORG" text inside the rectangle
 
-  drawString5x7(col + 5, row + 5, "CORG", bgColor, color); // Adjust offsets for alignment
+  drawString11x16(col + 5, row + 5, "CORG", bgColor, color); // Adjust offsets for alignment
 
 }
 
