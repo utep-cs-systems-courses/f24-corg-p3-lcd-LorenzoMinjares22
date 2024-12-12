@@ -1,12 +1,18 @@
 #include <msp430.h>
 
-#include "libTimer.h"
+#include <libTimer.h>
+
+#include "lcdutils.h"
+
+#include "lcddraw.h"
 
 #include "led.h"
 
 #include "buzzer.h"
 
 
+
+#define SW1 BIT3
 
 
 #define SW2 BIT0
@@ -18,7 +24,7 @@
 #define SW5 BIT3
 
  
-
+#define SWITCH_1 SW1
 #define SWITCH_2 SW2
 
 #define SWITCH_3 SW3
@@ -39,6 +45,8 @@ volatile int green_on = 0;
 
 volatile int redDim = 0;
 volatile int isCpuOff = 0; // Flag to track CPU state
+volatile u_char width = screenWidth>>1, height = screenHeight>>1;
+
 
 
 int main(void) {
@@ -46,9 +54,19 @@ int main(void) {
   configureClocks();           // Setup master clock
   enableWDTInterrupts();       // Enable watchdog timer interrupts
   buzzer_init();               // Initialize buzzer
+  
   P1DIR |= LEDS;               // Set LED pins as outputs
   P1OUT &= ~LEDS;              // Turn off all LEDs
 
+  P1REN |= SWITCH_1;
+ 
+  P1IE |= SWITCH_1;
+
+  P1OUT |= SWITCH_1;
+
+  P1DIR &= ~SWITCH_1;
+
+    
   P2REN |= SWITCH_P2;          // Enable pull-up resistors for P2 buttons
 
   P2OUT |= SWITCH_P2;
@@ -61,14 +79,17 @@ int main(void) {
 
 
 
-void switch_interrupt_handler_P2_2() {
-  char p2val = P2IN;
+void switch_interrupt_handler_P1() {
+  char p1val = P1IN;
 
-  // Update interrupt edge to detect button press and release
-  P2IES |= (p2val & SWITCH_2); // Set high-to-low edge if button is not pressed
-  P2IES &= (p2val | ~SWITCH_2); // Set low-to-high edge if button is pressed
 
-  if (p2val & SW2) {
+
+  P1IES |= (p1val & SWITCH_1);
+
+  P1IES &= (p1val | ~SWITCH_1);
+
+  
+  if (p1val & SW1) {
     // Button released, do nothing
   } else {
     // Button pressed, toggle CPU state
@@ -89,9 +110,30 @@ void switch_interrupt_handler_P2_2() {
     }
   }
 
-  P2IFG &= ~SWITCH_2; // Clear interrupt flag for SW2
+  P1IFG &= ~SWITCH_1; // Clear interrupt flag for SW1
 }
 
+void switch_interrupt_handler_P2_2() {
+
+  char p2val = P2IN;
+
+  // Update interrupt edge to detect button press and release
+
+  P2IES |= (p2val & SWITCH_2); // Set high-to-low edge if button is not pressed
+
+  P2IES &= (p2val | ~SWITCH_2); // Set low-to-high edge if button is pressed
+
+  if (p2val & SW2) {
+
+    // Button released, do nothing
+
+  } else {
+
+    bounceDVDLogo();
+  }
+}
+
+  
 
 void switch_interrupt_handler_P2_3() {
 
@@ -99,66 +141,64 @@ void switch_interrupt_handler_P2_3() {
 
   P2IES |= (p2val & SWITCH_3);
 
-  P2IES &= (p2val |  ~SWITCH_3);
+  P2IES &= (p2val | ~SWITCH_3);
+
+
 
   if(p2val & SW3) {
 
-    P1OUT &= ~LED_GREEN;
+    //P1OUT &= ~LED_GREEN;
 
     green_on = 0;
 
-    buzzer_set_period(0);
+    //buzzer_set_period(0);
 
   } else {
 
-    P1OUT |= LED_GREEN;
+    //P1OUT |= LED_GREEN;
 
-    buzzer_set_period(3300);
+    //buzzer_set_period(3300);
+
+    char size = 60;
 
     green_on = 1;
+
+    clearScreen(COLOR_PINK);
+
+    // drawFilledTriangle(width, height, COLOR_BLACK,size);
+
+    drawString5x7(50,30, "(o_0)", COLOR_WHITE, COLOR_BLACK);
+
+
 
   }
 
 }
-
 
 volatile int dimDutyCycle = 0; // Duty cycle (0-100%)
 
 volatile int dimEnabled = 0;  // Whether dimming is active
 
 
-
 void switch_interrupt_handler_P2_4() {
 
   char p2val = P2IN;
-
-
 
   P2IES |= (p2val & SWITCH_4);
 
   P2IES &= (p2val | ~SWITCH_4);
 
+  if (p2val & SW4) {
 
 
-  if (p2val & SWITCH_4) {
 
-    // setDimEnabled(0); // Disable dimming on release
+  }else {
 
-  } else {
+    clearScreen(COLOR_WHITE);
 
-    //setDimEnabled(1); // Enable dimming
+    //drawTriangle(width, height, 15, COLOR_RED);
 
-    static int dutyCycle = 0;
-
-    dutyCycle += 20;  // Increment duty cycle by 20%
-
-    if (dutyCycle > 100) {
-
-      dutyCycle = 0; // Reset to 0% after 100%
-
-    }
-
-    // setDimDutyCycle(dutyCycle); // Update duty cycle
+    // P1OUT &= ~LED;
 
   }
 
@@ -183,15 +223,53 @@ void switch_interrupt_handler_P2_5() {
 
   } else {
 
-    buzzer_set_period(4940);
+    buzzer_set_period(6590);
 
-    __delay_cycles(1000000);
+    __delay_cycles(5000000);
 
-    buzzer_set_period(4940);
+    buzzer_set_period(4400);
 
-    __delay_cycles(1000000);
+    __delay_cycles(12500000);
+
+    buzzer_set_period(6590);
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(4400);
+
+    __delay_cycles(12500000); //a
+
+    buzzer_set_period(6590);
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(4400);
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(4940); //b
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(5540);//c#
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(6590);
+
+    __delay_cycles(5000000);
+
+    buzzer_set_period(8800);
+
+    //__delay_cycles(5000000);
+
+    //buzzer_set_period(4400);
+
+    __delay_cycles(12500000);
 
     buzzer_set_period(0);
+
+
 
     /* buzzer_set_period(4940);
 
@@ -204,6 +282,22 @@ void switch_interrupt_handler_P2_5() {
   }
 
 }
+
+
+
+void __interrupt_vec(PORT1_VECTOR) Port_1() {
+
+  if(P1IFG & SWITCH_1) {
+
+    P1IFG &= ~SWITCH_1;
+
+    switch_interrupt_handler_P1();
+
+  }
+
+}
+
+
 
 void __interrupt_vec(PORT2_VECTOR) Port_2() {
  
@@ -244,7 +338,19 @@ void __interrupt_vec(PORT2_VECTOR) Port_2() {
 
 void __interrupt_vec(WDT_VECTOR) WDT() {
 
-  // blinkDimmingLogic(); // Call dimming logic in blink.c
+  if (P2IFG & SW2) {
+
+
+
+    P2IFG &= ~SW2;
+
+
+
+    switch_interrupt_handler_P2_2();
+
+
+
+  }
 
   
 

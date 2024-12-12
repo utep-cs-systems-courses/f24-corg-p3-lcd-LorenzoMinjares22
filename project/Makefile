@@ -1,62 +1,81 @@
-COMMON_OBJECTS = main.o
-
-CPU = msp430g2553
-
-CFLAGS = -mmcu=${CPU} -I../h
-
-LDFLAGS = -L/opt/ti/msp430_gcc/include
+all: libLcd.a lcddemo.elf lcddemo-s.elf
 
 
 
-CC = msp430-elf-gcc
+CPU             = msp430g2553
 
-AS = msp430-elf-as
+CFLAGS          = -mmcu=${CPU} -Os -I../h
 
+LDFLAGS 	= -L/opt/ti/msp430_gcc/include -L../lib
 
+#switch the compiler (for the internal make rules)
 
+CC              = msp430-elf-gcc
 
+AS              = msp430-elf-as
 
-all: led-c.elf #led-s.elf
-
-
-
-
-
-led-s.elf: ${COMMON_OBJECTS} buzzer.o redControl-s.o   
-
-	${CC} ${CFLAGS} ${LDFLAGS} -o $@ $^ ../lib/libTimer.a
+AR              = msp430-elf-ar
 
 
 
-led-c.elf: ${COMMON_OBJECTS} buzzer.o redControl-c.o
+libLcd.a: font-11x16.o font-5x7.o font-8x12.o lcdutils.o lcddraw.o
 
-	${CC} ${CFLAGS} ${LDFLAGS} -o $@ $^ ../lib/libTimer.a
+	$(AR) crs $@ $^
 
 
 
-load-s: led-s.elf
+lcddraw.o: bounce.c lcddraw.c lcddraw.h lcdutils.h
 
-	msp430loader.sh $^
+lcdutils.o: lcdutils.c lcdutils.h
 
-load-c: led-c.elf
+buzzer.c: buzzer.h
 
-	msp430loader.sh $^
+redControl-c.o: led.h
+
+drawFilledTriangle-c.o: led.h
+
+drawThing.o: led.h
+
+wdInterruptHandler.o: led.h
+
+
+
+
+
+install: libLcd.a
+
+	mkdir -p ../h ../lib
+
+	mv $^ ../lib
+
+	cp *.h ../h
 
 
 
 clean:
 
-	rm -f *.o *.elf *~ *.c# *#
+	rm -f libLcd.a *.o *.elf *.c# *.c~ *~ *#
 
 
 
-buzzer.c: buzzer.h
+lcddemo-c.elf: main.o bounce.c buzzer.o redControl-c.o drawFilledTriangle-c.o drawTriangle-c.o drawThing-c.o  libLcd.a
+
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ -lTimer
 
 
 
-main.o: led.h
+lcddemo-s.elf: main.o bounce.c buzzer.o redControl-s.o drawFilledTriangle-c.o drawTriangle-s.s drawThing-c.o libLcd.a
 
-redControl-c.o: led.h
+	$(CC) $(CFLAGS) $(LDFLAGS) $^ -o $@ -lTimer
 
-wdInterruptHandler.o: led.h
 
+
+load-c: lcddemo-c.elf
+
+	msp430loader.sh $^
+
+
+
+load-s: lcddemo-s.elf
+
+	msp430loader.sh $^
