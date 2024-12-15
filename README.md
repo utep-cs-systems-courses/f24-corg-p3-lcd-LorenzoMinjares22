@@ -11,7 +11,7 @@ S2 button will display a blinking triangle in the middle of the screen. The tria
 S4 will play a simple song 
 
 
-#How to run it?
+How to run it?
 
 run command make load-c will run the program using only c file
 
